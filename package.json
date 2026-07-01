@@ -1,0 +1,70 @@
+{
+  "name": "pulsedeck-freelab-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "author": "Freelab",
+  "description": "PulseDeck Freelab serial workstation desktop shell",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --win nsis",
+    "dist:portable": "electron-builder --win portable",
+    "publish:win": "electron-builder --win nsis --publish always"
+  },
+  "build": {
+    "appId": "com.freelab.pulsedeck",
+    "productName": "PulseDeck Freelab",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "index.html",
+      "scripts/**/*",
+      "styles/**/*",
+      "electron/**/*",
+      "README-desktop.md",
+      "package.json"
+    ],
+    "asar": true,
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "holderethan7589915-lab",
+        "repo": "pulsedeck-freelab-updates"
+      }
+    ],
+    "win": {
+      "signAndEditExecutable": false,
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "PulseDeck-Freelab-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "PulseDeck Freelab"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^26.0.0"
+  }
+}
