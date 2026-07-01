@@ -1,0 +1,16 @@
+node_modules/
+dist/
+dist-*/
+.cache/
+.npm-cache/
+.tmp/
+.agents/
+.codex/
+.vscode/
+
+*.log
+*.tmp
+*.asar
+*.exe
+*.blockmap
+latest.yml

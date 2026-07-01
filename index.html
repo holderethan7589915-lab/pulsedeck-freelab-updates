@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PulseDeck Freelab串口上位机</title>
+    <link rel="stylesheet" href="styles/main.css?v=uwb45-voice-split">
+</head>
+<body data-theme="dark">
+    <div class="app-shell">
+        <section class="hero">
+            <div class="hero-copy">
+                <div class="eyebrow">景世豪</div>
+                <h1>Freelab串口上位机</h1>
+                <p>
+                    该上位机目前是景世豪研发，测试中ing~FreeLab
+                </p>
+                <div class="hero-actions">
+                    <button class="btn-primary" id="connectBtn">连接串口</button>
+                    <button class="btn-secondary" id="disconnectBtn" disabled>断开</button>
+                    <button class="btn-secondary" id="newWindowBtn" hidden>新开窗口</button>
+                    <span class="chip" id="serialSupportChip">检测 Web Serial...</span>
+                </div>
+                <div class="footer-note" id="runtimeHint">
+                    建议用支持 Web Serial 的 Chromium 内核浏览器打开，例如 Edge 或 Chrome。
+                </div>
+            </div>
+
+            <div class="hero-panel">
+                <div class="section-title">
+                    <h2>连接参数</h2>
+                    <span id="connectionLabel">未连接</span>
+                </div>
+
+                <div class="port-grid">
+                    <label>波特率
+                        <select id="baudRate">
+                            <option>9600</option>
+                            <option>19200</option>
+                            <option>38400</option>
+                            <option>57600</option>
+                            <option selected>115200</option>
+                            <option>230400</option>
+                            <option>460800</option>
+                            <option>921600</option>
+                        </select>
+                    </label>
+                    <label>数据位
+                        <select id="dataBits">
+                            <option value="7">7</option>
+                            <option value="8" selected>8</option>
+                        </select>
+                    </label>
+                    <label>停止位
+                        <select id="stopBits">
+                            <option value="1" selected>1</option>
+                            <option value="2">2</option>
+                        </select>
+                    </label>
+                    <label>校验
+                        <select id="parity">
+                            <option value="none" selected>无</option>
+                            <option value="even">偶</option>
+                            <option value="odd">奇</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-tile">
+                        <span>接收总字节</span>
+                        <strong id="totalBytes">0</strong>
+                    </div>
+                    <div class="stat-tile">
+                        <span>当前定位</span>
+                        <strong>协议验真 / 串口终端</strong>
+                    </div>
+                </div>
+
+                <div class="badge-row">
+                    <span class="inline-chip">固定帧解析</span>
+                    <span class="inline-chip">时间戳日志</span>
+                    <span class="inline-chip">自动发送</span>
+                    <span class="inline-chip">模板保存</span>
+                </div>
+            </div>
+        </section>
+
+        <div class="mode-tabs" id="modeTabs">
+            <div class="rail-brand">
+                <span class="rail-logo">PD</span>
+                <span>串口上位机</span>
+            </div>
+            <div class="rail-nav">
+                <button class="mode-tab active" data-mode="serial">
+                    <span class="nav-icon">IO</span>
+                    <span>收发</span>
+                </button>
+                <button class="mode-tab" data-mode="packet" data-layer="frame">
+                    <span class="nav-icon">FRM</span>
+                    <span>协议帧</span>
+                </button>
+                <button class="mode-tab" data-mode="packet" data-layer="visual">
+                    <span class="nav-icon">VIS</span>
+                    <span>可视化</span>
+                </button>
+                <button class="mode-tab" data-mode="packet" data-layer="mapping">
+                    <span class="nav-icon">MAP</span>
+                    <span>映射</span>
+                </button>
+            </div>
+            <div class="rail-footer">
+                <button class="theme-toggle" id="themeToggleBtn" type="button" aria-pressed="false" aria-label="Theme" title="Theme">
+                    <span class="theme-toggle-swatches" aria-hidden="true">
+                        <span class="theme-swatch theme-swatch-dark"></span>
+                        <span class="theme-swatch theme-swatch-pink"></span>
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <section class="mode-view" id="packetMode" data-layer="frame">
+            <div class="mode-stage packet-stage">
+                <div class="mode-splash">
+                    <div>
+                        <div class="mode-kicker">Packet Verify Deck</div>
+                        <h2>自定义数据帧验真台</h2>
+                        <p>把上位机当成协议状态机，实时接收串口流，按帧头、帧尾、校验和心跳规则筛出你真正关心的字段。</p>
+                    </div>
+                    <div class="badge-row">
+                        <span class="inline-chip">帧头对齐</span>
+                        <span class="inline-chip">帧尾校验</span>
+                        <span class="inline-chip">心跳识别</span>
+                        <span class="inline-chip">字段筛选</span>
+                        <span class="inline-chip">流式解析</span>
+                    </div>
+                </div>
+
+                <div class="packet-layer-switcher" hidden>
+                    <div class="packet-layer-copy">
+                        <strong>界面已拆成上下两层</strong>
+                        <span>上层只看总览，下层只看字段映射和记录；你手动切换即可，不再互相挤在一起。</span>
+                    </div>
+                    <div class="packet-layer-tabs" id="packetLayerTabs">
+                        <button class="packet-layer-tab active" data-layer="overview">上层总览</button>
+                        <button class="packet-layer-tab" data-layer="mapping">下层映射 / 记录</button>
+                    </div>
+                </div>
+
+                <div class="packet-layer-view active" id="packetOverviewView">
+                    <div class="packet-layer-header">
+                        <div>
+                            <h3>上层总览界面</h3>
+                            <p>这里只保留协议配置、参数绑定、可视化和实时结果，避免被底部映射表干扰。</p>
+                        </div>
+                    </div>
+                    <div class="packet-layout">
+                        <div class="stack packet-sidebar">
+                            <div class="card emphasis-card protocol-config-card">
+                                <div class="section-title">
+                                    <h3>协议配置</h3>
+                                    <span>偏移从整帧起始算，等同单片机解析视角</span>
+                                </div>
+                                <div class="stack">
+                                    <div class="row-3">
+                                        <label>解析模式
+                                            <select id="parseMode">
+                                                <option value="fixed" selected>固定长度包</option>
+                                                <option value="tail">帧头 + 帧尾</option>
+                                            </select>
+                                        </label>
+                                        <label>总字节数
+                                            <input id="packetLength" type="number" min="1" value="12">
+                                        </label>
+                                        <label>帧头 Hex（可选）
+                                            <input id="packetHeader" type="text" placeholder="例如 AA55">
+                                        </label>
+                                    </div>
+                                    <div class="row-3">
+                                        <label>帧尾 Hex（可选）
+                                            <input id="packetFooter" type="text" placeholder="例如 0D0A">
+                                        </label>
+                                        <label>校验方式
+                                            <select id="checksumType">
+                                                <option value="none" selected>不校验</option>
+                                                <option value="xor8">XOR-8</option>
+                                                <option value="sum8">SUM-8</option>
+                                                <option value="crc16">CRC16(CCITT)</option>
+                                            </select>
+                                        </label>
+                                        <label>心跳标记 Hex（可选）
+                                            <input id="heartbeatValue" type="text" placeholder="例如 01">
+                                        </label>
+                                    </div>
+                                    <div class="row-3">
+                                        <label>心跳偏移
+                                            <input id="heartbeatOffset" type="number" min="0" value="2">
+                                        </label>
+                                        <label class="toggle-card">
+                                            <span>校验包含帧头</span>
+                                            <input id="checksumIncludeHeader" type="checkbox" checked>
+                                        </label>
+                                        <label class="toggle-card">
+                                            <span>实时流解析</span>
+                                            <input id="liveParseToggle" type="checkbox" checked>
+                                        </label>
+                                    </div>
+                                    <label>模板名称
+                                        <input id="templateName" type="text" placeholder="例如 心跳状态帧">
+                                    </label>
+                                    <div class="toolbar">
+                                        <button class="btn-primary" id="addFieldBtn">新增字段</button>
+                                        <button class="btn-secondary" id="saveTemplateBtn">保存模板</button>
+                                        <button class="btn-secondary" id="loadTemplateBtn">载入模板</button>
+                                        <button class="btn-warning" id="simulateFrameBtn">模拟流入</button>
+                                        <button class="btn-secondary" id="resetPacketStateBtn">清空流状态</button>
+                                    </div>
+                                    <div class="hint">
+                                        推荐协议结构是“帧头 + 类型/命令 + 载荷 + 校验 + 帧尾”。字段表里只勾选当前关心的内容，右侧窗口就会像 MCU 一样只保留你要看的结果。
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card telemetry-binding-card">
+                                <div class="section-title">
+                                    <h3>参数面板映射</h3>
+                                    <span id="telemetryBindingHint">固定协议映射</span>
+                                </div>
+                                <div class="stack">
+                                    <label>面板数据来源
+                                        <select id="telemetryBindingMode">
+                                            <option value="fixed" selected>固定协议映射</option>
+                                            <option value="field">字段表绑定</option>
+                                        </select>
+                                    </label>
+                                    <div class="mapping-grid" id="telemetryBindingList" hidden></div>
+                                    <div class="hint" id="telemetryBindingDesc">
+                                        固定协议映射会继续按 MK8000 48-byte 视图解析；切到字段表绑定后，左侧重要参数面板只跟这里的绑定关系走，不再受其它固定偏移解释干扰。
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card telemetry-visual-card">
+                                <div class="section-title">
+                                    <h3>重要参数可视化</h3>
+                                    <span>按 48 字节 UART 帧实时刷新</span>
+                                </div>
+                                <div class="telemetry-grid">
+                                    <div class="telemetry-panel">
+                                        <div class="telemetry-head">
+                                            <div class="telemetry-link-badge idle" id="telemetryLinkBadge">LINK --</div>
+                                            <div class="telemetry-chip-row" id="telemetryFlagChips">
+                                                <span class="telemetry-chip">等待数据</span>
+                                            </div>
+                                        </div>
+                                        <div class="telemetry-kpi-grid">
+                                            <div class="telemetry-kpi">
+                                                <span>SEQ</span>
+                                                <strong id="telemetrySeq">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>Mode</span>
+                                                <strong id="telemetryMode">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>Dist Set</span>
+                                                <strong id="telemetryDistSet">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>AZ FoM</span>
+                                                <strong id="telemetryFom">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>Ele FoM</span>
+                                                <strong id="telemetryElevationFom">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>Flags</span>
+                                                <strong id="telemetryFlagsText">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>Pair ID</span>
+                                                <strong id="telemetryPairId">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>Pair</span>
+                                                <strong id="telemetryPairStatus">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>FINAL接收率</span>
+                                                <strong id="telemetryFinalRxRate">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>测距成功率</span>
+                                                <strong id="telemetryRangingRate">--</strong>
+                                            </div>
+                                            <div class="telemetry-kpi">
+                                                <span>链路质量</span>
+                                                <strong id="telemetryLinkQuality">--</strong>
+                                            </div>
+                                        </div>
+                                        <div class="telemetry-chip-row">
+                                            <span class="telemetry-chip" id="telemetryKeyBitmap">KEY --</span>
+                                            <span class="telemetry-chip" id="telemetryProtoVer">PROTO --</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="telemetry-panel">
+                                        <div class="distance-angle-layout">
+                                            <div class="distance-ring" id="telemetryDistanceRing">
+                                                <div class="distance-ring-inner">
+                                                    <div class="distance-ring-label">UWB Distance</div>
+                                                    <div class="distance-ring-value" id="telemetryDistance">--</div>
+                                                    <div class="distance-ring-meta" id="telemetryDistanceMeta">等待完整数据帧</div>
+                                                </div>
+                                            </div>
+                                            <div class="angle-readout-grid">
+                                                <div class="angle-readout-card">
+                                                    <span>Azimuth</span>
+                                                    <strong id="telemetryAngle">--</strong>
+                                                </div>
+                                                <div class="angle-readout-card">
+                                                    <span>Elevation</span>
+                                                    <strong id="telemetryElevation">--</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="telemetry-panel">
+                                        <div class="telemetry-panel-title">摇杆与按键</div>
+                                        <div class="joystick-layout">
+                                            <div class="joy-pad">
+                                                <div class="joy-dot" id="telemetryJoyDot"></div>
+                                            </div>
+                                            <div class="joystick-readout">
+                                                <div class="telemetry-kpi compact">
+                                                    <span>JOY X</span>
+                                                    <strong id="telemetryJoyX">--</strong>
+                                                </div>
+                                                <div class="telemetry-kpi compact">
+                                                    <span>JOY Y</span>
+                                                    <strong id="telemetryJoyY">--</strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="voice-byte-grid">
+                                            <div class="voice-byte-card">
+                                                <span>VOICE B0</span>
+                                                <strong id="telemetryVoiceB0">--</strong>
+                                            </div>
+                                            <div class="voice-byte-card">
+                                                <span>VOICE B1</span>
+                                                <strong id="telemetryVoiceB1">--</strong>
+                                            </div>
+                                        </div>
+                                        <div class="telemetry-chip-row" id="telemetryKeyChips">
+                                            <span class="telemetry-chip">无按键</span>
+                                        </div>
+                                    </div>
+
+                                    <div class="telemetry-panel">
+                                        <div class="telemetry-panel-head">
+                                            <div class="telemetry-panel-title">IMU 原始值</div>
+                                            <span class="telemetry-panel-state idle" id="telemetryImuStatus">等待数据</span>
+                                        </div>
+                                        <div class="axis-list">
+                                            <div class="axis-row">
+                                                <span>ACC X</span>
+                                                <div class="axis-track"><div class="axis-fill" id="telemetryAccXFill"></div></div>
+                                                <strong id="telemetryAccXValue">--</strong>
+                                            </div>
+                                            <div class="axis-row">
+                                                <span>ACC Y</span>
+                                                <div class="axis-track"><div class="axis-fill" id="telemetryAccYFill"></div></div>
+                                                <strong id="telemetryAccYValue">--</strong>
+                                            </div>
+                                            <div class="axis-row">
+                                                <span>ACC Z</span>
+                                                <div class="axis-track"><div class="axis-fill" id="telemetryAccZFill"></div></div>
+                                                <strong id="telemetryAccZValue">--</strong>
+                                            </div>
+                                            <div class="axis-row">
+                                                <span>GYRO X</span>
+                                                <div class="axis-track"><div class="axis-fill gyro" id="telemetryGyroXFill"></div></div>
+                                                <strong id="telemetryGyroXValue">--</strong>
+                                            </div>
+                                            <div class="axis-row">
+                                                <span>GYRO Y</span>
+                                                <div class="axis-track"><div class="axis-fill gyro" id="telemetryGyroYFill"></div></div>
+                                                <strong id="telemetryGyroYValue">--</strong>
+                                            </div>
+                                            <div class="axis-row">
+                                                <span>GYRO Z</span>
+                                                <div class="axis-track"><div class="axis-fill gyro" id="telemetryGyroZFill"></div></div>
+                                                <strong id="telemetryGyroZValue">--</strong>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <div class="stack packet-main">
+                            <div class="card inspection-card">
+                                <div class="section-title">
+                                    <h3>验真状态总览</h3>
+                                    <span id="packetStatusText">等待实时数据...</span>
+                                </div>
+                                <div class="inspection-grid">
+                                    <div class="mini-tile">
+                                        <span>当前模式</span>
+                                        <strong id="currentModeText">固定长度包</strong>
+                                    </div>
+                                    <div class="mini-tile">
+                                        <span>帧同步状态</span>
+                                        <strong id="syncState">未同步</strong>
+                                    </div>
+                                    <div class="mini-tile">
+                                        <span>缓冲区字节</span>
+                                        <strong id="bufferBytes">0</strong>
+                                    </div>
+                                    <div class="mini-tile">
+                                        <span>有效数据包</span>
+                                        <strong id="validFrames">0</strong>
+                                    </div>
+                                    <div class="mini-tile">
+                                        <span>心跳包</span>
+                                        <strong id="heartbeatFrames">0</strong>
+                                    </div>
+                                    <div class="mini-tile">
+                                        <span>异常包</span>
+                                        <strong id="invalidFrames">0</strong>
+                                    </div>
+                                    <div class="mini-tile">
+                                        <span>丢弃字节</span>
+                                        <strong id="discardedBytes">0</strong>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="result-deck">
+                                <div class="card window-card raw-preview-card">
+                                    <div class="section-title">
+                                        <h3>最近一帧原始数据</h3>
+                                        <span>完整帧 HEX 预览</span>
+                                    </div>
+                                    <div class="window-body">
+                                        <textarea id="packetHexPreview" readonly placeholder="收到完整数据帧后会显示十六进制内容"></textarea>
+                                    </div>
+                                </div>
+
+                                <div class="card window-card metric-result-card">
+                                    <div class="section-title">
+                                        <h3>启用字段结果</h3>
+                                        <span>只显示你勾选的字段</span>
+                                    </div>
+                                    <div class="window-body">
+                                        <div class="metric-grid metric-grid-large" id="metricGrid">
+                                            <div class="empty-state">先在左侧字段映射中勾选需要验真的字段，收到完整数据帧后这里会显示结果。</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card packet-event-card">
+                                <div class="section-title">
+                                    <h3>协议事件流</h3>
+                                    <span>显示对齐、心跳、校验和异常重同步</span>
+                                </div>
+                                <div class="event-list" id="packetEventList">
+                                    <div class="empty-state">实时接收后，这里会记录帧头对齐、心跳命中、校验失败和重同步过程。</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="packet-layer-view" id="packetMappingView">
+                    <div class="packet-layer-header mapping">
+                        <div>
+                            <h3>下层映射 / 记录界面</h3>
+                            <p>这里只看字段定义、帧记录和字段记录，适合你手动对照、排查和修改映射。</p>
+                        </div>
+                    </div>
+                    <div class="packet-layout">
+                        <div class="stack packet-sidebar">
+                            <div class="card">
+                                <div class="section-title">
+                                    <h3>字段映射</h3>
+                                    <span>只启用你当前要验真的字段</span>
+                                </div>
+                                <div class="field-table-wrap">
+                                    <table>
+                                        <thead>
+                                            <tr>
+                                                <th>字段名</th>
+                                                <th>起始</th>
+                                                <th>长度</th>
+                                                <th>类型</th>
+                                                <th>倍率</th>
+                                                <th>偏置</th>
+                                                <th>单位</th>
+                                                <th>启用</th>
+                                                <th>删除</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="fieldTableBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stack packet-main">
+                            <div class="record-split">
+                                <div class="card record-card">
+                                    <div class="section-title">
+                                        <h3>协议帧记录</h3>
+                                        <span>只看帧级结果，保留最近 12 帧</span>
+                                    </div>
+                                    <div class="history-table-wrap">
+                                        <table>
+                                            <thead>
+                                                <tr id="historyHeadRow">
+                                                    <th>时间</th>
+                                                    <th>类型</th>
+                                                    <th>结果</th>
+                                                    <th>原始帧</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="packetHistoryBody">
+                                                <tr>
+                                                    <td colspan="4" class="meta">还没有解析到完整数据帧。</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <div class="card record-card">
+                                    <div class="section-title">
+                                        <h3>字段映射记录</h3>
+                                        <span>只显示当前启用的字段</span>
+                                    </div>
+                                    <div class="history-table-wrap">
+                                        <table>
+                                            <thead>
+                                                <tr id="fieldHistoryHeadRow">
+                                                    <th>时间</th>
+                                                    <th>类型</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="fieldHistoryBody">
+                                                <tr>
+                                                    <td colspan="2" class="meta">先在左侧字段映射中勾选需要显示的字段。</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="mode-view active" id="serialMode">
+            <div class="mode-stage terminal-stage">
+                <div class="mode-splash">
+                    <div>
+                        <div class="mode-kicker">Serial Console Deck</div>
+                        <h2>串口收发终端</h2>
+                        <p>长数据按块显示，收发时间和方向分离，适合看命令交互、连续日志和大段 HEX 数据。</p>
+                    </div>
+                    <div class="badge-row">
+                        <span class="inline-chip">时间戳</span>
+                        <span class="inline-chip">HEX / ASCII</span>
+                        <span class="inline-chip">自动发送</span>
+                        <span class="inline-chip">日志导出</span>
+                    </div>
+                </div>
+
+                <div class="serial-layout">
+                    <div class="stack">
+                        <div class="card serial-log-card">
+                        <div class="section-title">
+                            <h3>接收日志</h3>
+                            <span>时间戳 + ASCII / HEX 双视图</span>
+                        </div>
+                        <div class="toolbar">
+                            <label>显示模式
+                                <select id="receiveViewMode">
+                                    <option value="ascii">ASCII</option>
+                                    <option value="hex" selected>HEX</option>
+                                </select>
+                            </label>
+                            <label>时间格式
+                                <select id="timestampMode">
+                                    <option value="full" selected>时:分:秒.毫秒</option>
+                                    <option value="time">时:分:秒</option>
+                                    <option value="none">不显示</option>
+                                </select>
+                            </label>
+                            <button class="btn-secondary" id="clearLogBtn">清空日志</button>
+                            <button class="btn-secondary" id="exportLogBtn">导出日志</button>
+                        </div>
+                        <div class="toggle-line">
+                            <label><input id="autoScrollToggle" type="checkbox" checked> 自动滚动</label>
+                            <label><input id="showTxToggle" type="checkbox" checked> 显示发送</label>
+                            <label><input id="showRxToggle" type="checkbox" checked> 显示接收</label>
+                        </div>
+                        <div class="log-box" id="serialLog"></div>
+                    </div>
+                    </div>
+
+                    <div class="stack serial-sidebar">
+                        <div class="card">
+                        <div class="section-title">
+                            <h3>发送控制</h3>
+                            <span>支持单发、HEX、自动发送</span>
+                        </div>
+                        <div class="stack">
+                            <div class="row-2">
+                                <label>发送格式
+                                    <select id="sendFormat">
+                                        <option value="ascii">ASCII 文本</option>
+                                        <option value="hex" selected>HEX 字节流</option>
+                                    </select>
+                                </label>
+                                <label>换行附加
+                                    <select id="lineEnding">
+                                        <option value="">无</option>
+                                        <option value="\n" selected>\n</option>
+                                        <option value="\r">\r</option>
+                                        <option value="\r\n">\r\n</option>
+                                    </select>
+                                </label>
+                            </div>
+                            <label>发送内容
+                                <textarea id="sendInput" placeholder="ASCII 模式输入文本，HEX 模式输入例如 AA 55 01 0D"></textarea>
+                            </label>
+                            <div class="toolbar">
+                                <button class="btn-success" id="sendBtn">立即发送</button>
+                                <button class="btn-secondary" id="stopAutoSendBtn" disabled>停止自动发送</button>
+                            </div>
+                            <div class="row-2">
+                                <label>自动发送周期（ms）
+                                    <input id="autoSendInterval" type="number" min="20" value="500">
+                                </label>
+                                <label>发送备注
+                                    <input id="sendNote" type="text" placeholder="例如 查询状态命令">
+                                </label>
+                            </div>
+                            <label><input id="autoSendToggle" type="checkbox"> 启用自动发送</label>
+                        </div>
+                    </div>
+
+                        <div class="card">
+                        <div class="section-title">
+                            <h3>快捷命令</h3>
+                            <span>点一下就能写入发送框</span>
+                        </div>
+                        <div class="send-presets">
+                            <button class="preset-btn" data-format="hex" data-payload="AA 55 01 00 0D">
+                                <strong>查询状态</strong>
+                                <span>HEX: AA 55 01 00 0D</span>
+                            </button>
+                            <button class="preset-btn" data-format="hex" data-payload="AA 55 02 01 0D">
+                                <strong>启动设备</strong>
+                                <span>HEX: AA 55 02 01 0D</span>
+                            </button>
+                            <button class="preset-btn" data-format="hex" data-payload="AA 55 02 00 0D">
+                                <strong>停止设备</strong>
+                                <span>HEX: AA 55 02 00 0D</span>
+                            </button>
+                            <button class="preset-btn" data-format="ascii" data-payload="READ_TEMP">
+                                <strong>读取温度</strong>
+                                <span>ASCII: READ_TEMP</span>
+                            </button>
+                        </div>
+                    </div>
+
+                        <div class="card">
+                        <div class="section-title">
+                            <h3>最近发送历史</h3>
+                            <span>单击可回填复用</span>
+                        </div>
+                        <div class="history-pills" id="sendHistory"></div>
+                    </div>
+                </div>
+            </div>
+            </div>
+        </section>
+    </div>
+    <script src="scripts/app.js?v=uwb45-voice-split"></script>
+</body>
+</html>
+
